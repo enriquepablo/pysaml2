@@ -4,6 +4,7 @@
 import base64
 import uuid
 import six
+import datetime
 from future.backports.urllib.parse import parse_qs
 from future.backports.urllib.parse import urlencode
 from future.backports.urllib.parse import urlparse
@@ -41,6 +42,9 @@ from saml2.time_util import in_a_while, a_while_ago
 from fakeIDP import FakeIDP
 from fakeIDP import unpack_form
 from pathutils import full_path
+
+
+XML_RESPONSE_FILE = full_path("saml2_response2.xml")
 
 AUTHN = {
     "class_ref": INTERNETPROTOCOLPASSWORD,
@@ -338,6 +342,28 @@ class TestClient:
         assert req.name_id == nid
         assert req.issuer.text == "urn:mace:example.com:saml:roland:sp"
         assert req.session_index == [SessionIndex("_foo")]
+
+    def test_response_1_1(self):
+
+        with open(XML_RESPONSE_FILE) as f:
+            resp_str = f.read()
+
+        now = datetime.datetime.utcnow()
+        then = now + datetime.timedelta(hours=1)
+        resp_str = resp_str.format(now=now.isoformat(), then=then.isoformat())
+        resp_str = base64.encodestring(resp_str.encode('utf-8'))
+
+        authn_response = self.client.parse_authn_request_response(
+            resp_str, BINDING_HTTP_POST,
+            {"id1": "http://foo.example.com/service"})
+
+        assert authn_response is not None
+        assert authn_response.issuer() == IDP
+        assert authn_response.response.assertion[0].issuer.text == IDP
+        session_info = authn_response.session_info()
+
+        print(session_info)
+        assert session_info["ava"] == {"sn": ['Perez']}
 
     def test_response_1(self):
         IDP = "urn:mace:example.com:saml:roland:idp"
